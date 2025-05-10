@@ -1,0 +1,368 @@
+[
+    {
+        "frame": 1,
+        "pitch": -43.0052678578556,
+        "yaw": 4.7121894275135165,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 2,
+        "pitch": -47.984469651524854,
+        "yaw": 2.091482199241292,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 3,
+        "pitch": -46.040711410300055,
+        "yaw": 0.7137536862111147,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 4,
+        "pitch": -46.687745352228035,
+        "yaw": 2.5910603416389657,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 5,
+        "pitch": -46.970515802187904,
+        "yaw": 2.962842425526434,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 6,
+        "pitch": -40.8634023926682,
+        "yaw": 2.6677181907107146,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 7,
+        "pitch": -37.08757849220128,
+        "yaw": 3.1557639793884547,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 8,
+        "pitch": -33.69815884596008,
+        "yaw": 2.844291225605179,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 9,
+        "pitch": -32.14425947147772,
+        "yaw": 2.168804711532897,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 10,
+        "pitch": -30.335080555058305,
+        "yaw": 2.2651329671897726,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 11,
+        "pitch": -29.222243587244595,
+        "yaw": 2.5782622633086234,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 12,
+        "pitch": -28.697234006489893,
+        "yaw": 2.3896764229692473,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 13,
+        "pitch": -28.490516566413888,
+        "yaw": 1.723411973461664,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 14,
+        "pitch": -28.45384631772801,
+        "yaw": 1.7322913425642743,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 15,
+        "pitch": -30.14264723770236,
+        "yaw": 2.8398844797895464,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 16,
+        "pitch": -29.95085146832465,
+        "yaw": 1.5336999139671361,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 17,
+        "pitch": -29.71774653430619,
+        "yaw": 1.7050620920883306,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 18,
+        "pitch": -29.7526835226702,
+        "yaw": 1.4430028505715864,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 19,
+        "pitch": -30.05104840617093,
+        "yaw": 0.8676345569253292,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 20,
+        "pitch": -30.74210838586454,
+        "yaw": 0.7343549190384436,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 21,
+        "pitch": -31.321901042745946,
+        "yaw": 0.1837575165507842,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 22,
+        "pitch": -31.827156721721746,
+        "yaw": -0.2958358408378484,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 23,
+        "pitch": -32.919796873918685,
+        "yaw": -0.32575962733690217,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 24,
+        "pitch": -33.163925610932694,
+        "yaw": -0.3890805393457518,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 25,
+        "pitch": -32.94038274132022,
+        "yaw": -0.050385047969617514,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 26,
+        "pitch": -33.47543302546783,
+        "yaw": -1.227459845845611,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 27,
+        "pitch": -33.94937244904651,
+        "yaw": -1.8282882335589434,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 28,
+        "pitch": -34.677842365197435,
+        "yaw": -1.2869844352128,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 29,
+        "pitch": -35.265700351471175,
+        "yaw": -1.147189943341795,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 30,
+        "pitch": -35.6922001872253,
+        "yaw": -1.3991914130730894,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 31,
+        "pitch": -35.39165526271353,
+        "yaw": -1.7046215621248904,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 32,
+        "pitch": -34.90592272433964,
+        "yaw": -1.9773897848835142,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 33,
+        "pitch": -34.545982662518036,
+        "yaw": -1.9565484442524066,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 34,
+        "pitch": -33.91059653210354,
+        "yaw": -2.0022560858513985,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 35,
+        "pitch": -33.51997094949393,
+        "yaw": -2.3980198953427228,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 36,
+        "pitch": -33.57091156297046,
+        "yaw": -3.338468102788079,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 37,
+        "pitch": -33.828706969025625,
+        "yaw": -4.164865839896371,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 38,
+        "pitch": -34.336701588708884,
+        "yaw": -4.950935447719228,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 39,
+        "pitch": -33.88072376184265,
+        "yaw": -4.80711806462867,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 40,
+        "pitch": -33.528406767564775,
+        "yaw": -4.704620563065342,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 41,
+        "pitch": -32.96245393969648,
+        "yaw": -4.855603392861265,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 42,
+        "pitch": -33.21826133511071,
+        "yaw": -4.368737034029798,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 43,
+        "pitch": -33.32127667553169,
+        "yaw": -4.484818488263754,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 44,
+        "pitch": -33.5346294522261,
+        "yaw": -4.748247551306353,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 45,
+        "pitch": -33.53251485014412,
+        "yaw": -5.999225492279263,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 46,
+        "pitch": -32.901397974332994,
+        "yaw": -6.875805850725056,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 47,
+        "pitch": -32.554816830717904,
+        "yaw": -6.91883859655683,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 48,
+        "pitch": -32.60821528125936,
+        "yaw": -6.238012601347297,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 49,
+        "pitch": -32.38475578115347,
+        "yaw": -5.822080108973807,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 50,
+        "pitch": -33.11903644309157,
+        "yaw": -5.703534616598296,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 51,
+        "pitch": -33.737135975333466,
+        "yaw": -6.24642417391291,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 52,
+        "pitch": -33.87575204090084,
+        "yaw": -6.0998932117063385,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 53,
+        "pitch": -33.97559179229416,
+        "yaw": -6.116930821141334,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 54,
+        "pitch": -33.726475796598024,
+        "yaw": -6.064567257729022,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 55,
+        "pitch": -33.54396868406004,
+        "yaw": -5.735143601697854,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 56,
+        "pitch": -33.348427646249746,
+        "yaw": -5.474276587398336,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 57,
+        "pitch": -33.23701940960055,
+        "yaw": -5.591298241123477,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 58,
+        "pitch": -32.977046162215906,
+        "yaw": -5.402494381942499,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 59,
+        "pitch": -33.18642164765536,
+        "yaw": -6.146235675863642,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 60,
+        "pitch": -33.378053823632065,
+        "yaw": -5.511435798259364,
+        "action": "gaze_zone/left_mirror"
+    },
+    {
+        "frame": 61,
+        "pitch": -33.32853258797688,
+        "yaw": -5.454418518204028,
+        "action": "gaze_zone/left_mirror"
+    }
+]

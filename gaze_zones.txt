@@ -1,0 +1,59 @@
+gaze_zone/left_mirror
+
+Pitch Range: -47.98 to -27.46
+
+Yaw Range: -6.92 to 4.71
+
+gaze_zone/left
+
+Pitch Range: -53.11 to -27.78
+
+Yaw Range: -1.09 to 5.71
+
+gaze_zone/front
+
+Pitch Range: -47.14 to 7.78
+
+Yaw Range: -1.41 to 9.06
+
+gaze_zone/center_mirror
+
+Pitch Range: 4.83 to 26.34
+
+Yaw Range: -3.00 to 10.06
+
+gaze_zone/front_right
+
+Pitch Range: 23.91 to 31.33
+
+Yaw Range: -2.23 to 9.28
+
+gaze_zone/right_mirror
+
+Pitch Range: 29.47 to 46.29
+
+Yaw Range: -5.95 to -0.39
+
+gaze_zone/right
+
+Pitch Range: 42.01 to 54.04
+
+Yaw Range: -4.68 to 3.40
+
+gaze_zone/infotainment
+
+Pitch Range: 22.50 to 47.32
+
+Yaw Range: -22.60 to -1.04
+
+gaze_zone/steering_wheel
+
+Pitch Range: -11.63 to 25.46
+
+Yaw Range: -40.24 to 10.39
+
+gaze_zone/not_valid
+
+Pitch Range: -14.78 to -5.54
+
+Yaw Range: -7.58 to 9.03
