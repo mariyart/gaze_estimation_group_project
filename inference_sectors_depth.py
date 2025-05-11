@@ -61,16 +61,24 @@ def pre_process(image):
     ])
     return transform(image).unsqueeze(0)
 
-def draw_grid(frame):
-    h, w, _ = frame.shape
-    for i in range(1, 6):
-        cv2.line(frame, (int(i * w / 6), 0), (int(i * w / 6), h), (255, 255, 255), 1)
-        cv2.line(frame, (0, int(i * h / 6)), (w, int(i * h / 6)), (255, 255, 255), 1)
-
 def draw_gaze_arrow(frame, start, end, color=(255, 0, 255)):
     start = tuple(np.int32(start))
     end = tuple(np.int32(end))
     cv2.arrowedLine(frame, start, end, color, 2, tipLength=0.2)
+
+def eye_aspect_ratio(eye):
+    A = np.linalg.norm(eye[1] - eye[5])
+    B = np.linalg.norm(eye[2] - eye[4])
+    C = np.linalg.norm(eye[0] - eye[3])
+    return (A + B) / (2.0 * C)
+
+def is_head_turned(landmarks, w, h):
+    nose_tip = np.array([landmarks[1].x * w, landmarks[1].y * h])
+    left_eye = np.array([landmarks[33].x * w, landmarks[33].y * h])
+    right_eye = np.array([landmarks[263].x * w, landmarks[263].y * h])
+    eye_distance = np.linalg.norm(left_eye - right_eye)
+    imbalance = abs(np.linalg.norm(nose_tip - left_eye) - np.linalg.norm(nose_tip - right_eye))
+    return imbalance / eye_distance > 0.35, imbalance / eye_distance
 
 def identify_gaze_zone(pitch, yaw):
     for zone, limits in gaze_zones.items():
@@ -80,8 +88,6 @@ def identify_gaze_zone(pitch, yaw):
 
 def main(params):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    # Load gaze model
     model = get_model(params.model, data_config[params.dataset]["bins"], inference_mode=True)
     model.load_state_dict(torch.load(params.weight, map_location=device))
     model.to(device).eval()
@@ -89,24 +95,26 @@ def main(params):
 
     pitch_kf, yaw_kf = KalmanFilter1D(), KalmanFilter1D()
     face_detector = uniface.RetinaFace()
-
-    # MediaPipe FaceMesh
     mp_face_mesh = mp.solutions.face_mesh
     face_mesh = mp_face_mesh.FaceMesh(refine_landmarks=True)
 
-    # Camera and iris constants
-    CAMERA_MATRIX = np.array([[578.7566, 0.0, 349.099],
-                              [0.0, 575.6480, 239.78],
-                              [0.0, 0.0, 1.0]], dtype="double")
+    CAMERA_MATRIX = np.array([[578.7566, 0.0, 349.099], [0.0, 575.6480, 239.78], [0.0, 0.0, 1.0]])
     IRIS_DIAMETER_MM = 11.7
     smoothed_depth = None
     alpha = 0.9
 
+    blink_counter = 0
+    drowsiness_counter = 0
+    DROWSINESS_THRESHOLD = 60
+    BLINK_THRESHOLD = 0.2
+    EAR_THRESHOLD = 0.2
+    LONG_BLINK_DURATION = 20
+
     cap = cv2.VideoCapture(int(params.source)) if params.source.isdigit() else cv2.VideoCapture(params.source)
     fps = cap.get(cv2.CAP_PROP_FPS)
     frame_delay = 1 / fps if fps > 0 else 0.033
-    out = None
 
+    out = None
     if params.output:
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -121,23 +129,47 @@ def main(params):
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = face_mesh.process(rgb)
 
+        distraction_messages = []
         if results.multi_face_landmarks:
             for face_landmarks in results.multi_face_landmarks:
                 lm = face_landmarks.landmark
+                head_turned, head_turn_ratio = is_head_turned(lm, w, h)
+                if head_turned and head_turn_ratio > 0.7:
+                    distraction_messages.append("Distracted: Head Turned")
 
-                for eye_start, iris_ids, center_id in [(473, [474, 475, 476, 477], 473), (468, [469, 470, 471, 472], 468)]:
+                left_eye = np.array([(lm[i].x * w, lm[i].y * h) for i in [33, 160, 158, 133, 153, 144]])
+                right_eye = np.array([(lm[i].x * w, lm[i].y * h) for i in [362, 385, 386, 263, 373, 374]])
+                ear = (eye_aspect_ratio(left_eye) + eye_aspect_ratio(right_eye)) / 2
+
+                if ear < BLINK_THRESHOLD:
+                    blink_counter += 1
+                    if blink_counter >= LONG_BLINK_DURATION:
+                        distraction_messages.append("Distracted: Long Blink")
+                else:
+                    blink_counter = 0
+
+                if ear < EAR_THRESHOLD:
+                    drowsiness_counter += 1
+                    if drowsiness_counter >= DROWSINESS_THRESHOLD:
+                        distraction_messages.append("Distracted: Drowsiness")
+                else:
+                    drowsiness_counter = 0
+
+                if head_turn_ratio > 0.7 or ear < BLINK_THRESHOLD:
+                    continue
+
+                for eye_label, iris_ids, center_id in [("Right", [474, 475, 476, 477], 473), ("Left", [469, 470, 471, 472], 468)]:
                     iris = np.array([(lm[i].x * w, lm[i].y * h) for i in iris_ids])
                     iris_center = np.mean(iris, axis=0)
                     eye_center = np.array((lm[center_id].x * w, lm[center_id].y * h))
                     draw_gaze_arrow(frame, eye_center, eye_center + 2 * (iris_center - eye_center))
 
-                iris_diameter_pixels = np.linalg.norm(iris[0] - iris[2])
-                if iris_diameter_pixels > 0:
-                    focal_length_px = (CAMERA_MATRIX[0, 0] + CAMERA_MATRIX[1, 1]) / 2
-                    depth_current = (focal_length_px * IRIS_DIAMETER_MM) / (iris_diameter_pixels * 1000)
-                    smoothed_depth = depth_current if smoothed_depth is None else alpha * smoothed_depth + (1 - alpha) * depth_current
-                    cv2.putText(frame, f"Depth: {smoothed_depth:.2f} m", (10, 160),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    iris_diameter_pixels = np.linalg.norm(iris[0] - iris[2])
+                    if iris_diameter_pixels > 0:
+                        focal_length_px = (CAMERA_MATRIX[0, 0] + CAMERA_MATRIX[1, 1]) / 2
+                        depth = (focal_length_px * IRIS_DIAMETER_MM) / (iris_diameter_pixels * 1000)
+                        smoothed_depth = depth if smoothed_depth is None else alpha * smoothed_depth + (1 - alpha) * depth
+                        cv2.putText(frame, f"Depth: {smoothed_depth:.2f} m", (10, 240), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
         bboxes, keypoints = face_detector.detect(frame)
         for bbox in bboxes:
@@ -148,24 +180,24 @@ def main(params):
             pitch, yaw = model(image)
             pitch_deg = torch.sum(F.softmax(pitch, dim=1) * idx_tensor) * data_config[params.dataset]["binwidth"] - data_config[params.dataset]["angle"]
             yaw_deg = torch.sum(F.softmax(yaw, dim=1) * idx_tensor) * data_config[params.dataset]["binwidth"] - data_config[params.dataset]["angle"]
+
             pitch_sm = pitch_kf.update(pitch_deg.item())
             yaw_sm = yaw_kf.update(yaw_deg.item())
             zone = identify_gaze_zone(pitch_sm, yaw_sm)
 
             draw_bbox_gaze(frame, bbox, np.radians(pitch_sm), np.radians(yaw_sm))
-            cv2.putText(frame, f"Pitch: {pitch_sm:.1f}° Yaw: {yaw_sm:.1f}° Zone: {zone}",
-                        (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+            cv2.putText(frame, f"Pitch: {pitch_sm:.1f} Yaw: {yaw_sm:.1f} Zone: {zone}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
-        draw_grid(frame)
+        for i, msg in enumerate(distraction_messages):
+            cv2.putText(frame, msg, (10, 100 + 30 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
         if params.view:
-            cv2.imshow("Integrated Gaze & Depth Estimation", frame)
+            cv2.imshow("Driver Monitoring", frame)
             if cv2.waitKey(1) & 0xFF == 27:
                 break
 
         if out:
             out.write(frame)
-
         time.sleep(frame_delay)
 
     cap.release()
