@@ -112,6 +112,8 @@ def main(params):
     gaze_data = []
 
     while cap.isOpened():
+        start_time = time.time()  # Start time for FPS
+
         ret, frame = cap.read()
         if not ret:
             break
@@ -124,7 +126,6 @@ def main(params):
             for face_landmarks in results.multi_face_landmarks:
                 lm = face_landmarks.landmark
 
-                # Geometric yaw/pitch
                 nose_tip = np.array([lm[1].x * w, lm[1].y * h])
                 left_eye = np.array([lm[33].x * w, lm[33].y * h])
                 right_eye = np.array([lm[263].x * w, lm[263].y * h])
@@ -138,7 +139,6 @@ def main(params):
                 cv2.putText(frame, f"[Geom] Yaw: {np.degrees(yaw_geom):.1f}°", (10, 120),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (100, 255, 100), 2)
 
-                # Iris depth
                 for eye_start, iris_ids, center_id in [(473, [474, 475, 476, 477], 473), (468, [469, 470, 471, 472], 468)]:
                     iris = np.array([(lm[i].x * w, lm[i].y * h) for i in iris_ids])
                     iris_center = np.mean(iris, axis=0)
@@ -167,8 +167,6 @@ def main(params):
             zone = identify_gaze_zone(pitch_sm, yaw_sm)
 
             draw_bbox_gaze(frame, bbox, np.radians(pitch_sm), np.radians(yaw_sm))
-            # cv2.putText(frame, f"[DL] Pitch: {pitch_sm:.1f}° Yaw: {yaw_sm:.1f}° Zone: {zone}",
-            #             (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
             gaze_data.append({
                 "frame": frame_index,
@@ -178,6 +176,13 @@ def main(params):
             })
 
         draw_grid(frame)
+
+        # ===== FPS Overlay =====
+        end_time = time.time()
+        fps_calc = 1.0 / (end_time - start_time)
+        cv2.putText(frame, f"FPS: {fps_calc:.2f}", (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        # =======================
 
         if params.view:
             cv2.imshow("Integrated Gaze & Depth Estimation", frame)

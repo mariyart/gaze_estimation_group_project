@@ -35,7 +35,13 @@ cap = cv2.VideoCapture(0)
 fps = cap.get(cv2.CAP_PROP_FPS)
 frame_delay = 1 / fps if fps > 0 else 0.033
 
+# For smoothed FPS display
+smoothed_fps = None
+fps_alpha = 0.9
+
 while cap.isOpened():
+    start_time = time.time()
+
     ret, frame = cap.read()
     if not ret:
         break
@@ -86,6 +92,14 @@ while cap.isOpened():
                     smoothed_depth = depth_current if smoothed_depth is None else alpha * smoothed_depth + (1 - alpha) * depth_current
                     cv2.putText(frame, f"Depth: {smoothed_depth:.2f} m", (10, 90),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+
+    # === Stable FPS display ===
+    end_time = time.time()
+    instant_fps = 1.0 / (end_time - start_time)
+    smoothed_fps = instant_fps if smoothed_fps is None else fps_alpha * smoothed_fps + (1 - fps_alpha) * instant_fps
+    cv2.putText(frame, f"FPS: {smoothed_fps:.2f}", (10, 120),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+    # ==========================
 
     cv2.imshow("Jetson Gaze and Pose Estimation", frame)
     if cv2.waitKey(int(frame_delay * 1000)) & 0xFF == 27:
