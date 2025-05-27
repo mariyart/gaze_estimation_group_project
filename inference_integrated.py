@@ -157,7 +157,16 @@ def main(params):
         for bbox in bboxes:
             x_min, y_min, x_max, y_max = map(int, bbox[:4])
             image = frame[y_min:y_max, x_min:x_max]
-            image = pre_process(image).to(device)
+            if image is None or image.size == 0:
+                logging.warning(f"Empty image crop at frame {frame_index}, skipping...")
+                continue
+
+            try:
+                image = pre_process(image).to(device)
+            except Exception as e:
+                logging.warning(f"Preprocessing failed at frame {frame_index}: {e}")
+                continue
+
 
             pitch, yaw = model(image)
             pitch_deg = torch.sum(F.softmax(pitch, dim=1) * idx_tensor) * data_config[params.dataset]["binwidth"] - data_config[params.dataset]["angle"]
