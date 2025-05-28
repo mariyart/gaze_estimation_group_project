@@ -5,6 +5,7 @@ import numpy as np
 import onnxruntime as ort
 import logging
 import time
+import mediapipe as mp
 
 from typing import Tuple
 from utils.helpers import draw_bbox_gaze
@@ -47,7 +48,7 @@ class GazeEstimationONNX:
     def __init__(self, model_path: str):
         self.session = ort.InferenceSession(
             model_path,
-            providers=["CPUExecutionProvider", "CUDAExecutionProvider"]
+            providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
         )
         self._bins = 90
         self._binwidth = 4
@@ -82,88 +83,86 @@ class GazeEstimationONNX:
         outputs = self.session.run(self.output_names, {self.input_name: input_tensor})
         return self.decode(outputs[0], outputs[1])
 
-# =================== Main Loop ===================
+# =================== Main ===================
 def parse_args():
-    parser = argparse.ArgumentParser(description="Gaze Estimation ONNX with Zones, Depth, Kalman, FPS")
-    parser.add_argument("--source", type=str, required=True, help="Video path or camera index (e.g., 0)")
-    parser.add_argument("--model", type=str, required=True, help="Path to ONNX model")
-    parser.add_argument("--output", type=str, default=None, help="Path to save output video")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source", required=True)
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--output", default=None)
     return parser.parse_args()
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format='%(message)s')
     args = parse_args()
 
-    try:
-        source = int(args.source)
-    except ValueError:
-        source = args.source
-
-    cap = cv2.VideoCapture(source)
+    cap = cv2.VideoCapture(int(args.source) if args.source.isdigit() else args.source)
     if not cap.isOpened():
-        raise IOError(f"Failed to open video source: {args.source}")
+        raise RuntimeError("Video source not available.")
 
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
 
     writer = None
     if args.output:
-        writer = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
+        writer = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
 
-    engine = GazeEstimationONNX(model_path=args.model)
-    detector = uniface.RetinaFace()
+    face_mesh = mp.solutions.face_mesh.FaceMesh(refine_landmarks=True)
     CAMERA_MATRIX = np.array([[578.7566, 0.0, 349.099], [0.0, 575.6480, 239.78], [0.0, 0.0, 1.0]], dtype="double")
     IRIS_DIAMETER_MM = 11.7
     alpha = 0.9
     smoothed_depth = None
 
+    engine = GazeEstimationONNX(args.model)
+    detector = uniface.RetinaFace()
+
     pitch_kf, yaw_kf = KalmanFilter1D(), KalmanFilter1D()
 
     while cap.isOpened():
-        start_time = time.time()
+        start = time.time()
         ret, frame = cap.read()
         if not ret:
             break
 
-        h, w = frame.shape[:2]
+        # Depth Estimation + Iris Position
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = face_mesh.process(rgb)
+        if results.multi_face_landmarks:
+            for face_landmarks in results.multi_face_landmarks:
+                lm = face_landmarks.landmark
+                for iris_ids in ([474, 475, 476, 477], [469, 470, 471, 472]):
+                    iris = np.array([(lm[i].x * width, lm[i].y * height) for i in iris_ids])
+                    iris_center = np.mean(iris, axis=0).astype(int)
+                    cv2.circle(frame, tuple(iris_center), 3, (0, 0, 255), -1)
+                iris_diameter_pixels = np.linalg.norm(iris[0] - iris[2])
+                if iris_diameter_pixels > 0:
+                    focal_px = (CAMERA_MATRIX[0, 0] + CAMERA_MATRIX[1, 1]) / 2
+                    depth_now = (focal_px * IRIS_DIAMETER_MM) / (iris_diameter_pixels * 1000)
+                    smoothed_depth = depth_now if smoothed_depth is None else alpha * smoothed_depth + (1 - alpha) * depth_now
+                    cv2.putText(frame, f"Depth: {smoothed_depth:.2f} m", (10, 60),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
-        bboxes, keypoints = detector.detect(frame)
-        for bbox, kps in zip(bboxes, keypoints):
+        bboxes, _ = detector.detect(frame)
+        for bbox in bboxes:
             x_min, y_min, x_max, y_max = map(int, bbox[:4])
-            face_crop = frame[y_min:y_max, x_min:x_max]
-
-            if face_crop is None or face_crop.size == 0:
-                logging.warning("Empty image crop, skipping...")
+            face = frame[y_min:y_max, x_min:x_max]
+            if face.size == 0:
                 continue
 
             try:
-                pitch_rad, yaw_rad, pitch_deg, yaw_deg = engine.estimate(face_crop)
-            except Exception as e:
-                logging.warning(f"Estimation failed: {e}")
+                pitch_rad, yaw_rad, pitch_deg, yaw_deg = engine.estimate(face)
+            except:
                 continue
 
-            pitch_deg_sm = pitch_kf.update(pitch_deg)
-            yaw_deg_sm = yaw_kf.update(yaw_deg)
-            zone = identify_gaze_zone(pitch_deg_sm, yaw_deg_sm)
-            draw_bbox_gaze(frame, bbox, np.radians(pitch_deg_sm), np.radians(yaw_deg_sm))
-            cv2.putText(frame, f"{zone}", (x_min, y_min - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            pitch_sm = pitch_kf.update(pitch_deg)
+            yaw_sm = yaw_kf.update(yaw_deg)
+            zone = identify_gaze_zone(pitch_sm, yaw_sm)
+            draw_bbox_gaze(frame, bbox, np.radians(pitch_sm), np.radians(yaw_sm))
+            cv2.putText(frame, zone, (x_min, y_min - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            cv2.putText(frame, f"Pitch: {pitch_sm:.1f} Yaw: {yaw_sm:.1f}", (x_min, y_max + 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
 
-            # Heuristic iris depth estimation using keypoints (eye corners)
-            left_eye = np.array(kps[0])
-            right_eye = np.array(kps[1])
-            iris_diameter_pixels = np.linalg.norm(left_eye - right_eye) / 2  # Approximate radius
-            if iris_diameter_pixels > 0:
-                focal_length_px = (CAMERA_MATRIX[0, 0] + CAMERA_MATRIX[1, 1]) / 2
-                depth_current = (focal_length_px * IRIS_DIAMETER_MM) / (iris_diameter_pixels * 1000)
-                smoothed_depth = depth_current if smoothed_depth is None else alpha * smoothed_depth + (1 - alpha) * depth_current
-                cv2.putText(frame, f"Depth: {smoothed_depth:.2f} m", (10, 60),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-
-        fps_calc = 1.0 / (time.time() - start_time)
-        cv2.putText(frame, f"FPS: {fps_calc:.2f}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        fps_text = f"FPS: {1.0 / (time.time() - start):.2f}"
+        cv2.putText(frame, fps_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
         if writer:
             writer.write(frame)
