@@ -5,7 +5,7 @@ import torch
 import mediapipe as mp
 from PyQt6.QtWidgets import QApplication, QWidget, QHBoxLayout, QLabel, QVBoxLayout
 from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtGui import QImage, QPixmap, QVector3D
 import pyqtgraph.opengl as gl
 import pyqtgraph as pg
 import argparse
@@ -42,12 +42,6 @@ def get_zone_color(pitch, yaw):
         if pr[0] <= pitch <= pr[1] and yr[0] <= yaw <= yr[1]:
             return color
     return (0.5, 0.5, 0.5, 1)
-
-def create_plane_mesh(width=1.0, height=1.0):
-    return np.array([
-        [[0, 0, 0], [width, 0, 0], [width, height, 0]],
-        [[0, 0, 0], [width, height, 0], [0, height, 0]]
-    ])
 
 def create_plane_item(width=1.0, height=1.0, color=(0.5, 0.5, 0.5, 0.2)):
     vertices = np.array([
@@ -122,8 +116,15 @@ def infer_once(img, detector, predictor, draw=True, prev_dict=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--video', type=str, default=0, help="Path to video file")
+    parser.add_argument('--video', type=str, default="0", help="Path to video file")
     args = parser.parse_args()
+
+    # Allow numeric 0 for webcam
+    video_source = int(args.video) if args.video.isdigit() else args.video
+    cap = cv2.VideoCapture(video_source)
+    if not cap.isOpened():
+        print(f"Could not open video: {args.video}")
+        sys.exit(1)
 
     app = QApplication(sys.argv)
     window = QWidget()
@@ -131,7 +132,7 @@ def main():
     window.setLayout(layout)
 
     view = gl.GLViewWidget()
-    view.setCameraPosition(pos=np.array([0, 0, 0]), distance=2)
+    view.setCameraPosition(pos=QVector3D(0, 0, 0), distance=2)
     axis = gl.GLAxisItem()
     axis.setSize(1, 1, 1)
     view.addItem(axis)
@@ -146,11 +147,6 @@ def main():
 
     window.setGeometry(100, 100, 1280, 720)
     window.show()
-
-    cap = cv2.VideoCapture(args.video)
-    if not cap.isOpened():
-        print(f"Could not open video: {args.video}")
-        sys.exit(1)
 
     detector = FaceDetector(cfg.DETECTOR.THRESHOLD, cfg.DETECTOR.IMAGE_SIZE)
     predictor = GazePredictor(cfg.PREDICTOR, device=cfg.DEVICE)
@@ -218,7 +214,7 @@ def main():
                         closest_t, closest_name = float('inf'), None
                         for name, tris in mesh_tris.items():
                             for tri in tris:
-                                tri = [planes[name].transform().map(p) for p in tri]
+                                tri = [planes[name].transform().map(QVector3D(*p)) for p in tri]
                                 tri = [np.array([p.x(), p.y(), p.z()]) for p in tri]
                                 hit, t = ray_intersects_triangle(origin, D, tri)
                                 if hit and t < closest_t:

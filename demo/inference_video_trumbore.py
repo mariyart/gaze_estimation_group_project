@@ -154,10 +154,10 @@ def main():
     planes = {}
     plane_tris = {}
     specs = {
-        'front': (0.5, 0.5, (1, 0, 0, 0.4)),
-        'right': (0.5, 0.5, (0, 1, 0, 0.4)),
-        'left':  (0.5, 0.5, (0.6, 0, 0.6, 0.4)),
-        'top':   (1.0, 1.0, (0, 0, 1, 0.4))
+        'front': (2.0, 2.0, (1, 0, 0, 0.4)),
+        'right': (2.0, 2.0, (0, 1, 0, 0.4)),
+        'left':  (2.0, 2.0, (0.6, 0, 0.6, 0.4)),
+        'top':   (2.0, 2.0, (0, 0, 1, 0.4))
     }
     for name, (w, h, color) in specs.items():
         plane, verts, faces = create_plane_item(w, h, color)
@@ -187,20 +187,15 @@ def main():
                     origin = (left_eye + right_eye) / 2 * 2
                     view.opts['center'] = pg.Vector(origin[0], origin[1], origin[2])
 
-                    planes['front'].resetTransform()
-                    planes['front'].translate(origin[0] - 0.25, origin[1] - 0.25, origin[2] + 0.5)
-
-                    planes['right'].resetTransform()
+                    for name in planes:
+                        planes[name].resetTransform()
+                    planes['front'].translate(origin[0] - 1.0, origin[1] - 1.0, origin[2] + 1.0)
                     planes['right'].rotate(90, 0, 1, 0)
-                    planes['right'].translate(origin[0] + 0.25, origin[1] - 0.25, origin[2] + 0.25)
-
-                    planes['left'].resetTransform()
+                    planes['right'].translate(origin[0] + 1.5, origin[1] - 1.0, origin[2])
                     planes['left'].rotate(90, 0, 1, 0)
-                    planes['left'].translate(origin[0] - 0.75, origin[1] - 0.25, origin[2] + 0.25)
-
-                    planes['top'].resetTransform()
+                    planes['left'].translate(origin[0] - 2.5, origin[1] - 1.0, origin[2])
                     planes['top'].rotate(90, 1, 0, 0)
-                    planes['top'].translate(origin[0] - 0.5, origin[1] + 0.5, origin[2] - 0.5)
+                    planes['top'].translate(origin[0] - 1.0, origin[1] + 1.5, origin[2] - 1.0)
 
                     if out and 'gaze_out' in out:
                         prev_dict = out.copy()
@@ -219,7 +214,11 @@ def main():
                                     hit_name = name
 
                         plane_label.setText(f"Plane hit: {hit_name if hit_name else 'None'}")
-                        end_point = origin + D * 0.5
+                        if min_t != float('inf'):
+                            end_point = origin + D * min_t
+                        else:
+                            end_point = origin + D * 3.0
+
                         arrow_pos = np.array([origin, end_point])
                         if arrow_ref[0] is not None:
                             view.removeItem(arrow_ref[0])
