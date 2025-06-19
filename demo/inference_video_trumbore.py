@@ -5,11 +5,11 @@ import torch
 import mediapipe as mp
 from PyQt6.QtWidgets import QApplication, QWidget, QHBoxLayout, QLabel, QVBoxLayout
 from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtGui import QImage, QPixmap, QVector3D, QMatrix4x4
 import pyqtgraph.opengl as gl
 import pyqtgraph as pg
 import argparse
-from PyQt6.QtGui import QVector3D
+from PIL import Image
 
 from utils import config as cfg, update_config, draw_results
 from models import FaceDetectorIF as FaceDetector
@@ -44,21 +44,21 @@ def get_zone_color(pitch, yaw):
             return color
     return (0.5, 0.5, 0.5, 1)
 
-def create_plane_item(width=1.0, height=1.0, color=(0.5, 0.5, 0.5, 0.2)):
+def create_plane(width=2.0, height=2.0):
     vertices = np.array([
-        [0, 0, 0],
-        [width, 0, 0],
-        [width, height, 0],
-        [0, height, 0],
+        [-width/2, -height/2, 0],
+        [ width/2, -height/2, 0],
+        [ width/2,  height/2, 0],
+        [-width/2,  height/2, 0],
     ])
     faces = np.array([
         [0, 1, 2],
         [0, 2, 3],
     ])
-    md = gl.MeshData(vertexes=vertices, faces=faces)
-    plane = gl.GLMeshItem(meshdata=md, color=color, smooth=False, shader='shaded', drawFaces=True)
-    plane.setGLOptions('translucent')
-    return plane, vertices, faces
+    return vertices, faces
+
+def apply_transform(vertices, matrix):
+    return np.array([[vec.x(), vec.y(), vec.z()] for vec in [matrix.map(QVector3D(*v)) for v in vertices]])
 
 def ray_intersects_triangle(ray_origin, ray_vector, triangle):
     epsilon = 1e-6
@@ -84,45 +84,36 @@ def ray_intersects_triangle(ray_origin, ray_vector, triangle):
 def infer_once(img, detector, predictor, draw=True, prev_dict=None):
     out_dict = None
     bboxes, lms5, _ = detector.run(img)
-
     if isinstance(bboxes, (list, np.ndarray)) and len(bboxes) > 0:
         bboxes = np.array(bboxes)
         lms5 = np.array(lms5)
-
         if bboxes.ndim == 1 and bboxes.shape[0] == 4:
             bboxes = bboxes.reshape(1, 4)
             lms5 = lms5.reshape(1, 5, 2)
-
         if bboxes.ndim == 2 and bboxes.shape[1] >= 4:
             idxs_sorted = sorted(range(len(bboxes)), key=lambda k: bboxes[k][3] - bboxes[k][1])
             best_idx = idxs_sorted[-1]
             best_lms5 = lms5[best_idx]
             out_dict = predictor(img, best_lms5, undo_roll=True)
-
             if prev_dict is not None:
                 out_dict['gaze_out'] += prev_dict['gaze_out']
                 out_dict['gaze_out'] /= np.linalg.norm(out_dict['gaze_out'])
-
             if 'gaze_out' in out_dict:
                 pitch, yaw = get_pitch_yaw_from_vector(out_dict['gaze_out'])
                 out_dict['pitch'] = pitch
                 out_dict['yaw'] = yaw
-
             if draw:
                 img = draw_results(img, best_lms5, out_dict)
-
     return out_dict, img
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--video', type=str, default=0, help="Path to video file")
+    parser.add_argument('--video', type=str, default=0)
     args = parser.parse_args()
 
     app = QApplication(sys.argv)
     window = QWidget()
-    layout = QHBoxLayout()
-    window.setLayout(layout)
-
+    layout = QHBoxLayout(window)
     view = gl.GLViewWidget()
     view.setCameraPosition(pos=np.array([0, 0, 1]), distance=2)
     axis = gl.GLAxisItem()
@@ -149,21 +140,76 @@ def main():
     predictor = GazePredictor(cfg.PREDICTOR, device=cfg.DEVICE)
 
     arrow_ref = [None]
+    arrow_head_ref = [None]
     prev_dict = None
 
-    planes = {}
-    plane_tris = {}
     specs = {
-        'front': (2.0, 2.0, (1, 0, 0, 0.4)),
-        'right': (2.0, 2.0, (0, 1, 0, 0.4)),
-        'left':  (2.0, 2.0, (0.6, 0, 0.6, 0.4)),
-        'top':   (2.0, 2.0, (0, 0, 1, 0.4))
+        'front':  (0,   QVector3D(0, 0, 1), QVector3D(0, 0, 1.5), (1, 0, 0, 0.4)),
+        'right':  (90,  QVector3D(0, 1, 0), QVector3D(1.5, 0, 0),  (0, 1, 0, 0.4)),
+        'left':  (-90,  QVector3D(0, 1, 0), QVector3D(-1.5, 0, 0), (1, 0, 1, 0.4)),
+        'top':    (90,  QVector3D(1, 0, 0), QVector3D(0, 1.5, 0),  (0, 0, 1, 0.4)),
+        'bottom': (-90, QVector3D(1, 0, 0), QVector3D(0, -1.5, 0), (1, 1, 0, 0.4))
     }
-    for name, (w, h, color) in specs.items():
-        plane, verts, faces = create_plane_item(w, h, color)
-        planes[name] = plane
-        view.addItem(plane)
-        plane_tris[name] = [(verts[f[0]], verts[f[1]], verts[f[2]]) for f in faces]
+
+    image_files = {
+        'front': r"C:\Users\maria\Desktop\front.jpg",
+    }
+
+    base_vertices, base_faces = create_plane()
+    plane_tris = {}
+
+    loaded_images = {
+        name: (np.array(Image.open(path).convert("RGBA")), Image.open(path).size)
+        for name, path in image_files.items()
+    }
+
+    for name, (angle, axis, translation, color) in specs.items():
+        matrix = QMatrix4x4()
+        matrix.translate(translation)
+        matrix.rotate(angle, axis)
+
+        transformed_vertices = apply_transform(base_vertices, matrix)
+        plane_tris[name] = [
+            [transformed_vertices[idx] for idx in face] for face in base_faces
+        ]
+
+        # Proper image alignment
+        if name in image_files:
+            # Load and convert image
+            img = Image.open(image_files[name]).convert("RGBA")
+            img_np = np.array(img)
+            img_item = gl.GLImageItem(img_np)
+
+            # Scale image to exactly 2x2 world units (independent of resolution)
+            h, w = img_np.shape[:2]
+            image_transform = QMatrix4x4()
+            image_transform.translate(-1.0, -1.0, 0)  # Center image at (0,0)
+            image_transform.scale(2.0 / w, 2.0 / h, 1.0)  # Normalize pixels to 2x2
+
+            # Orientation and position
+            placement = QMatrix4x4()
+
+            if name == 'front':
+                placement.translate(0, 0, 1.5)  # move to front
+                placement.rotate(180, QVector3D(0, 1, 0))  # flip horizontally (Y-axis)
+                placement.rotate(180, QVector3D(0, 0, 1))  # flip vertically (Z-axis)
+                placement.rotate(-90, QVector3D(0, 0, 1))  # rotate 90 degrees clockwise around Z-axis
+            elif name == 'right':  # goes on LEFT wall (x = -1.5)
+                placement.rotate(90, QVector3D(0, 1, 0))
+                placement.translate(-1.5, 0, 0)
+            elif name == 'left':  # goes on RIGHT wall (x = +1.5)
+                placement.rotate(-90, QVector3D(0, 1, 0))
+                placement.translate(1.5, 0, 0)
+
+            final_transform = placement * image_transform
+            img_item.setTransform(final_transform)
+            view.addItem(img_item)
+
+        else:
+            md = gl.MeshData(vertexes=transformed_vertices, faces=base_faces)
+            plane_item = gl.GLMeshItem(meshdata=md, color=color, smooth=False, shader='shaded', drawFaces=True)
+            plane_item.setGLOptions('translucent')
+            view.addItem(plane_item)
 
     def update():
         nonlocal prev_dict
@@ -187,16 +233,6 @@ def main():
                     origin = (left_eye + right_eye) / 2 * 2
                     view.opts['center'] = pg.Vector(origin[0], origin[1], origin[2])
 
-                    for name in planes:
-                        planes[name].resetTransform()
-                    planes['front'].translate(origin[0] - 1.0, origin[1] - 1.0, origin[2] + 1.0)
-                    planes['right'].rotate(90, 0, 1, 0)
-                    planes['right'].translate(origin[0] + 1.5, origin[1] - 1.0, origin[2])
-                    planes['left'].rotate(90, 0, 1, 0)
-                    planes['left'].translate(origin[0] - 2.5, origin[1] - 1.0, origin[2])
-                    planes['top'].rotate(90, 1, 0, 0)
-                    planes['top'].translate(origin[0] - 1.0, origin[1] + 1.5, origin[2] - 1.0)
-
                     if out and 'gaze_out' in out:
                         prev_dict = out.copy()
                         D = out['gaze_out'] / np.linalg.norm(out['gaze_out'])
@@ -206,25 +242,42 @@ def main():
                         min_t, hit_name = float('inf'), None
                         for name, tris in plane_tris.items():
                             for tri in tris:
-                                tri_pts = [planes[name].transform().map(QVector3D(*pt)) for pt in tri]
-                                tri_pts = [np.array([p.x(), p.y(), p.z()]) for p in tri_pts]
-                                hit, t = ray_intersects_triangle(origin, D, tri_pts)
+                                hit, t = ray_intersects_triangle(origin, D, tri)
                                 if hit and t < min_t:
                                     min_t = t
                                     hit_name = name
 
                         plane_label.setText(f"Plane hit: {hit_name if hit_name else 'None'}")
-                        if min_t != float('inf'):
-                            end_point = origin + D * min_t
-                        else:
-                            end_point = origin + D * 3.0
-
+                        end_point = origin + D * (min_t if min_t != float('inf') else 3.0)
                         arrow_pos = np.array([origin, end_point])
                         if arrow_ref[0] is not None:
                             view.removeItem(arrow_ref[0])
                         arrow = gl.GLLinePlotItem(pos=arrow_pos, color=color, width=2, antialias=True)
                         view.addItem(arrow)
                         arrow_ref[0] = arrow
+
+                        if arrow_head_ref[0] is not None:
+                            view.removeItem(arrow_head_ref[0])
+
+                        cone_height = 0.2
+                        cone_radius = 0.05
+                        meshdata = gl.MeshData.cylinder(rows=10, cols=20, radius=[cone_radius, 0], length=cone_height)
+
+                        up = np.array([0, 0, 1])
+                        axis = np.cross(up, D)
+                        angle = np.degrees(np.arccos(np.clip(np.dot(up, D), -1.0, 1.0)))
+                        transform = QMatrix4x4()
+                        transform.translate(QVector3D(*end_point))
+                        if np.linalg.norm(axis) > 1e-6:
+                            transform.rotate(angle, QVector3D(*axis))
+
+                        vertices = meshdata.vertexes()
+                        vertices = apply_transform(vertices, transform)
+                        cone_mesh = gl.MeshData(vertexes=vertices, faces=meshdata.faces())
+                        arrow_head = gl.GLMeshItem(meshdata=cone_mesh, color=color, smooth=True, shader='shaded', drawFaces=True)
+                        arrow_head.setGLOptions('translucent')
+                        view.addItem(arrow_head)
+                        arrow_head_ref[0] = arrow_head
 
     timer = QTimer()
     timer.timeout.connect(update)
