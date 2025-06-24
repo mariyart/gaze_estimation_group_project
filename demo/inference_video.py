@@ -17,6 +17,52 @@ cudnn.enabled = cfg.CUDNN.ENABLED
 os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
 
 
+# ---------------------- GAZE ZONE MAPPING ----------------------
+GAZE_ZONES = {
+    "driver_side_window": {
+        "pitch": (-23.84, -23.2),
+        "yaw": (7.11, 10.31)
+    },
+    "phone_wheel": {
+        "pitch": (-22.7, -22.02),
+        "yaw": (7.7, 9.41)
+    },
+    "infotainment": {
+        "pitch": (-22.9, -22.4),
+        "yaw": (6.42, 7.0)
+    },
+    "passenger_face": {
+        "pitch": (-22.68, -22.54),
+        "yaw": (5.85, 7.53)
+    },
+    "passenger_side_window": {
+        "pitch": (-22.41, -22.3),
+        "yaw": (7.72, 8.13)
+    },
+    "rear_mirror": {
+        "pitch": (-18, -14),
+        "yaw": (6, 18)
+    },
+    "rear_passenger": {
+        "pitch": (-23.52, -23.41),
+        "yaw": (11.02, 15.83)
+    },
+    "passenger_footwell": {
+        "pitch": (-18.92, -12.26),
+        "yaw": (21.57, 40.52)
+    }
+}
+
+def get_zone_from_pitch_yaw(pitch, yaw):
+    for zone, ranges in GAZE_ZONES.items():
+        pmin, pmax = ranges["pitch"]
+        ymin, ymax = ranges["yaw"]
+        if pmin <= pitch <= pmax and ymin <= yaw <= ymax:
+            return zone
+    return "normal_driving"
+
+
+# ---------------------- KALMAN FILTER ----------------------
 class KalmanFilter1D:
     def __init__(self, process_variance=1e-6, measurement_variance=5e-1):
         self.x, self.P = 0.0, 1.0
@@ -29,7 +75,6 @@ class KalmanFilter1D:
         self.x += K * (measurement - self.x)
         self.P *= (1 - K)
         return self.x
-
 
 class KalmanFilter3D:
     def __init__(self, process_variance=1e-8, measurement_variance=1.0):
@@ -51,18 +96,17 @@ class KalmanFilter3D:
         return smoothed
 
 
+# ---------------------- INFERENCE HELPERS ----------------------
 def average_output(out_dict, prev_dict):
     out_dict['gaze_out'] += prev_dict['gaze_out']
     out_dict['gaze_out'] /= np.linalg.norm(out_dict['gaze_out'])
     return out_dict
-
 
 def get_pitch_yaw_from_vector(vector):
     x, y, z = vector
     yaw = np.degrees(np.arctan2(x, z))
     pitch = -np.degrees(np.arcsin(y))
     return pitch, yaw
-
 
 @Timer(name='Forward', fps=True, pprint=False)
 def infer_once(img, detector, predictor, draw, prev_dict=None):
@@ -100,6 +144,7 @@ def infer_once(img, detector, predictor, draw, prev_dict=None):
     return out_img, out_dict
 
 
+# ---------------------- VIDEO INFERENCE ----------------------
 def inference_video(cfg, video_path, draw=True, smooth=True):
     detector = FaceDetector(cfg.DETECTOR.THRESHOLD, cfg.DETECTOR.IMAGE_SIZE)
     predictor = GazePredictor(cfg.PREDICTOR, device=cfg.DEVICE)
@@ -108,14 +153,19 @@ def inference_video(cfg, video_path, draw=True, smooth=True):
     if not cap.isOpened():
         raise RuntimeError(f"Could not open video source: {video_path}")
 
-    is_file = isinstance(video_path, str)
+    is_file = isinstance(video_path, str) and os.path.isfile(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) if is_file else 0
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
-    base_name = os.path.splitext(os.path.basename(video_path))[0] if is_file else "webcam"
+    # Output paths only for file input
+    if is_file:
+        base_name = os.path.splitext(os.path.basename(video_path))[0]
+    else:
+        base_name = "webcam"
+
     base_dir = os.path.join("log", cfg.EXP_NAME)
     run_name = f"{base_name}_out_{cfg.PREDICTOR.BACKBONE_TYPE}"
     save_dir = os.path.join(base_dir, run_name)
@@ -131,58 +181,69 @@ def inference_video(cfg, video_path, draw=True, smooth=True):
 
     writer = cv2.VideoWriter(save_video_path, fourcc, fps, (width, height))
 
-    with open(csv_path, mode='w', newline='') as f:
-        csv_writer = csv.writer(f)
-        csv_writer.writerow(['frame_id', 'pitch', 'yaw'])
+    if is_file:
+        csv_file = open(csv_path, mode='w', newline='')
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(['frame_id', 'pitch', 'yaw', 'zone'])
+    else:
+        csv_file = None
+        csv_writer = None
 
-        frame_id = 0
-        prev_dict = None
-        gaze_filter = KalmanFilter3D()
+    frame_id = 0
+    prev_dict = None
+    gaze_filter = KalmanFilter3D()
 
-        frame_iter = tqdm.trange(total_frames, desc="Processing Video") if is_file else iter(int, 1)
+    frame_iter = tqdm.trange(total_frames, desc="Processing Video") if is_file else iter(int, 1)
 
-        for _ in frame_iter:
-            ret, frame = cap.read()
-            if not ret:
+    for _ in frame_iter:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        out_img, out_dict = infer_once(frame, detector, predictor, draw, prev_dict)
+
+        if out_dict and 'gaze_out' in out_dict:
+            gaze_vector = out_dict['gaze_out']
+            if smooth:
+                gaze_vector = gaze_filter.update(gaze_vector)
+            pitch, yaw = get_pitch_yaw_from_vector(gaze_vector)
+            zone = get_zone_from_pitch_yaw(pitch, yaw)
+            prev_dict = out_dict.copy() if smooth else None
+        else:
+            pitch, yaw = 0.0, 0.0
+            zone = "normal_driving"
+            prev_dict = None
+
+        if csv_writer:
+            csv_writer.writerow([frame_id, pitch, yaw, zone])
+
+        result_frame = out_img if draw and out_img is not None else frame
+        if draw:
+            text = f"Pitch: {pitch:.2f}°, Yaw: {yaw:.2f}°, Zone: {zone}"
+            cv2.putText(result_frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7, (0, 255, 0), 2)
+
+        writer.write(result_frame)
+
+        if draw:
+            cv2.imshow("3DGazeNet Output", result_frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
-            out_img, out_dict = infer_once(frame, detector, predictor, draw, prev_dict)
-
-            if out_dict and 'gaze_out' in out_dict:
-                gaze_vector = out_dict['gaze_out']
-                if smooth:
-                    gaze_vector = gaze_filter.update(gaze_vector)
-                pitch, yaw = get_pitch_yaw_from_vector(gaze_vector)
-                prev_dict = out_dict.copy() if smooth else None
-                csv_writer.writerow([frame_id, pitch, yaw])
-            else:
-                pitch, yaw = 0.0, 0.0
-                prev_dict = None
-                csv_writer.writerow([frame_id, pitch, yaw])
-
-            result_frame = out_img if draw and out_img is not None else frame
-            if draw:
-                text = f"Pitch: {pitch:.2f}°, Yaw: {yaw:.2f}°"
-                cv2.putText(result_frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-
-            writer.write(result_frame)
-
-            if not is_file:
-                cv2.imshow("3DGazeNet Real-Time", result_frame)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-
-            frame_id += 1
+        frame_id += 1
 
     cap.release()
     writer.release()
-    if not is_file:
+    if csv_file:
+        csv_file.close()
+    if draw:
         cv2.destroyAllWindows()
 
-    print(f"Video saved to: {save_video_path}")
-    print(f"CSV saved to:   {csv_path}")
+    if is_file:
+        print(f"Video saved to: {save_video_path}")
+        print(f"CSV saved to:   {csv_path}")
 
-
+# ---------------------- ARGUMENT PARSING ----------------------
 def parse_args():
     parser = argparse.ArgumentParser(description='3DGazeNet: Inference on video or webcam')
     parser.add_argument('--cfg', help='experiment config file', required=True, type=str)
@@ -193,6 +254,7 @@ def parse_args():
     return parser.parse_args()
 
 
+# ---------------------- ENTRY POINT ----------------------
 if __name__ == '__main__':
     args = parse_args()
     update_config(args.cfg)

@@ -248,7 +248,12 @@ def main():
                                     hit_name = name
 
                         plane_label.setText(f"Plane hit: {hit_name if hit_name else 'None'}")
-                        end_point = origin + D * (min_t if min_t != float('inf') else 3.0)
+                        if min_t != float('inf'):
+                            arrow_length = max(min_t - 0.1, 0.1)  # keep a small offset from the plane
+                        else:
+                            arrow_length = 2.0  # shorter fallback length
+
+                        end_point = origin + D * arrow_length
                         arrow_pos = np.array([origin, end_point])
                         if arrow_ref[0] is not None:
                             view.removeItem(arrow_ref[0])
