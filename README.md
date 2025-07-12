@@ -32,31 +32,13 @@ Download the data directory contatining pre-trained gaze estimation models from 
 
 ## Inference
 
-To run inference on a set of images follow the steps below. A set of example images are given in the `data/example_images` directory.
-
-1\. Pre-process the set of images. This step performs face detection and exports a `.pkl` file in the path defined by `--output_dir`, containing pre-processing data. For data pre-processing run the following command:
+For the final project of the group project, the 3DGazeNet was modified to also detect drowsiness, blinking, yawning and depth. The final script is demo\inference_video_integrated.py and is run by:
 
 ```
-$ cd tools
-$ python preprocess_inference.py --image_base_dir ../data/example_images 
-                                 --output_dir ../output/preprocessing
-                                 --gpu_id 0 --n_procs 5
+inference_video_integrated.py
 ```
 
-2\. Run inference on the set of images. This step outputs gaze estimation and 3D eye reconstruction results in a `.pkl` file in the `inference_results` directory. For inference run the following command:
-
-```
-$ python inference.py --cfg configs/inference/inference.yaml
-                      --inference_data_file 'output/preprocessing/data_face68.pkl'
-                      --inference_dataset_dir 'data/example_images/'
-                      --checkpoint data/3dgazenet/models/singleview/vertex/ALL/test_0/checkpoint.pth
-                      --skip_optimizer
-```
-
-3\. To inspect the gaze tracking results run the jupyter notebook in `notebooks/view-inference_results.ipynb`.
-
-Bash scripts for the above commands can be found in the `scripts` directory.
-
+in the demo folder. It's necessary to change the video path in the script itself.
 
 
 ## Citation
