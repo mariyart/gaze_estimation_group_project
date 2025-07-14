@@ -117,7 +117,8 @@ def mouth_aspect_ratio(pts):
     return np.linalg.norm(pts[0] - pts[1]) / np.linalg.norm(pts[2] - pts[3])
 
 # ---------------- Video Setup ----------------
-cap = cv2.VideoCapture(r"P:\gaze-estimation-main\data\test_videos\in car\18_34_14MJPG-0003.avi")
+#cap = cv2.VideoCapture(r"P:\gaze-estimation-main\data\test_videos\in car\18_52_47MJPG-0009.avi")
+cap = cv2.VideoCapture(0)
 fps = cap.get(cv2.CAP_PROP_FPS) or 25
 w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 frame_delay = int(1000 / fps)
